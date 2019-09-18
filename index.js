@@ -1,5 +1,8 @@
 var request = require("/opt/node_modules/request");
 var rp = require('/opt/node_modules/request-promise');
+var db_host = process.env.DB_HOST;
+var reg = process.env.REGION;
+
 // rp('https://api.uspharmacycard.com/drug/price/147/none/08873/00378395277/Atorvastatin%20Calcium/GENERIC/30/8')
 //     .then(function (response) {
 //         console.log("test:"+response)
@@ -10,9 +13,6 @@ var rp = require('/opt/node_modules/request-promise');
 //     });
 //single care
 const {Pool, Client} = require('/opt/node_modules/pg');
-var db_host = process.env.DB_HOST;
-var reg = process.env.REGION;
-
 
 // const connectionString = 'postgresql://postgres:secret@10.80.1.121:5432/apid'
 const connectionString = db_host;
@@ -56,7 +56,7 @@ exports.myhandler = async function abc(){
 //             //res = results.rows[0].isactive;
 //             // let status=res.isactive;
 //if(status){
-    var res1 = await client.query("SELECT drug_id FROM shuffle_drugs where flag = 'pending' and region = '"+reg+"'");
+    var res1 = await client.query ("SELECT drug_id FROM shuffle_drugs where flag = 'pending' and region = '"+reg+"'");
     for(var i=0; i< res1.rows.length ; i++){
         for(var j=0; j < res1.rows[i].drug_id.length; j++){
             //console.log("print ((((((((((((((((((("+res1.rows[i].drug_id[j]);
@@ -80,8 +80,20 @@ exports.myhandler = async function abc(){
             .then(async function (response) {
                 //console.log(url)
                 let jsondata = JSON.parse(response);
-                pricingData1.price = jsondata.Result.PharmacyPricings[0].Prices[0].Price;
-                pricingData1.pharmacy = jsondata.Result.PharmacyPricings[0].Pharmacy.Name;
+                var lowestPrice =  parseFloat(jsondata.Result.PharmacyPricings[0].Prices[0].Price) ;
+                var lowestPharmacy=jsondata.Result.PharmacyPricings[0].Pharmacy.Name;
+                jsondata.Result.PharmacyPricings.forEach(function(value){
+                    if(value!= null){
+                        if(lowestPrice > parseFloat(value.price)){
+                            lowestPrice =  parseFloat(value.Prices[0].Price);
+                            lowestPharmacy=value.Pharmacy.Name;
+                        }
+                     
+                    }
+                });
+                pricingData1.price = lowestPrice;
+                pricingData1.pharmacy = lowestPharmacy;
+                
                 //console.log("price="+pricingData1.price);
                 const query2 = 'INSERT INTO public_price(average_price, createdat, difference, drug_details_id, lowest_market_price, pharmacy, price, program_id, recommended_price) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *';
                 const values = [pricingData1.average_price, pricingData1.createdat, pricingData1.difference, drugUrlList.rows[0].drug_id, pricingData1.lowest_market_price,pricingData1.pharmacy,pricingData1.price,pricingData1.program_id,pricingData1.recommended_price];
